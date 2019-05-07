@@ -1,0 +1,398 @@
+---
+title: "Clustering"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Preprocessing
+
+
+```{r }
+
+library(plyr)
+CrimeData <- read.csv("crimedata.csv")
+CrimeData1 <- CrimeData
+#summary(CrimeData)
+#str(CrimeData)
+
+library(dplyr)
+# Rename column Community Name to remove special character - NOT WORKING 
+#CrimeData <- rename(CrimeData,c("Êcommunityname"= "communityname"))
+
+CrimeData$communityname <- CrimeData$"Êcommunityname"
+#CrimeData3 <- CrimeData3[-1,]
+
+# As community names can be duplicate for many states, NROW = 197 which means, 197 community names 
+# are duplicate for many states
+
+NROW(CrimeData[duplicated(CrimeData[c("communityname")]),])
+
+# Lets see if the combination of communityname and state can act as a primary key
+NROW(CrimeData[duplicated(CrimeData[c("communityname","state")]),])
+# YES, IT CAN.. zero duplicates
+
+
+# Creating a primary key column by concatenating communityname and state as "citystate"
+CrimeData$citystate <- paste(CrimeData$communityname,CrimeData$state)
+
+# Checking again to see the duplicates
+NROW(CrimeData[duplicated(CrimeData[c("citystate")]),])
+# DONE!! zero rows
+
+CrimeData2 <- CrimeData
+
+##STAGE 2
+
+#Next step is to check variable types as per the data - numeric, character, logical, factor
+
+
+
+
+CrimeData3 = sapply(CrimeData, function(x) as.numeric(format(x,decimal.part=".")) ) 
+CrimeData3 = as.data.frame(CrimeData3)
+
+#str(CrimeData3)
+CrimeData3$communityname = CrimeData$communityname
+CrimeData3$state = CrimeData$state
+CrimeData3$citystate = CrimeData$citystate
+
+## STAGE 3 -  handling missing values and NA's
+
+mean(CrimeData3$ViolentCrimesPerPop)  ## NA's are there so performing any operation will not yield anything
+mean(CrimeData3$ViolentCrimesPerPop,na.rm = TRUE) ## Now mean is calculated without considering NA values (preferable way)
+
+#is.na(CrimeData3$ViolentCrimesPerPop)
+#summary(CrimeData3)
+
+# dataframe states contains an aggregated list of all the states with the mean of violent crime w.r.t population of that state
+states=aggregate(x=CrimeData3$ViolentCrimesPerPop,by=list(CrimeData3$state),mean,na.rm=T)
+states=arrange(states,desc(x))
+#states
+
+#head(CrimeData3)
+
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+aggrCrimeData2 <- aggregate(list(Population = CrimeData3$population,
+                                 BlackPercentage = CrimeData3$racepctblack,
+                                 WhitePercentage = CrimeData3$racePctWhite,
+                                 AsianPercentage = CrimeData3$racePctAsian,
+                                 Age12to21 = CrimeData3$agePct12t21,
+                                 Age12to29 = CrimeData3$agePct12t29,
+                                 Age16to24 = CrimeData3$agePct16t24,
+                                 AgeAbove65 = CrimeData3$agePct65up,
+                                 MedianHouseHold = CrimeData3$medIncome,
+                                 Poverty = CrimeData3$NumUnderPov,
+                                 MiddleSchoolDropOut = CrimeData3$PctLess9thGrade,
+                                 HighSchoolDropOut = CrimeData3$PctNotHSGrad,
+                                 BachelorOrMore = CrimeData3$PctBSorMore,
+                                 Employed = CrimeData3$PctEmploy, 
+                                 Unemployed = CrimeData3$PctUnemployed,
+                                 Immigirants = CrimeData3$NumImmig,
+                                 ImmigirantsPercentage = CrimeData3$PctForeignBorn,
+                                 Homeless = CrimeData3$NumStreet,
+                                 ViolentCrimes = CrimeData3$ViolentCrimesPerPop, 
+                                 NonViolentCrimes = CrimeData3$nonViolPerPop,
+                                 Murders = CrimeData3$murders,
+                                 Rapes = CrimeData3$rapes,
+                                 Robberies = CrimeData3$robberies,
+                                 Assaults = CrimeData3$assaults,
+                                 Burglaries = CrimeData3$burglaries,
+                                 Larcenies = CrimeData3$larcenies,
+                                 AuntoTheft = CrimeData3 $autoTheft),
+                  by=list(state = CrimeData3$state),mean,na.rm=T)
+
+
+
+aggrCrimeData2 <- aggrCrimeData2[ which(aggrCrimeData2$state !='DC'), ]
+
+library(ggplot2)
+
+ggplot(aggrCrimeData2,
+       aes(x=reorder(aggrCrimeData2$state, -(aggrCrimeData2$Population/1000)),
+       y = (aggrCrimeData2$Population/1000),
+       fill = aggrCrimeData2$state) ) +
+       geom_bar(stat = "identity", show.legend=FALSE)  +
+       ggtitle("Population in the U.S states") +  
+       ylab("Population (In Thousands) ") +  
+       xlab("U.S State")
+
+
+
+
+```
+
+Based on population plot, grouping states into four groups with similar population size. the four group splits are in the following population range  - 
+Group 1 -> 20,000 - 29,000
+Group 2 -> 30,000-39,000
+Group 3 -> 40,000- 69,000
+Group 4 -> 69,000- 700,000
+
+
+
+```{r}
+FirstPopulationGroup <- c('VT',
+         'WY',
+         'ME',
+         'WV',
+         'NH',
+         'DE',
+         'NJ',
+         'ID',
+         'SC',
+         'SD',
+         'MN',
+         'KY',
+         'MS',
+         'AR',
+         'ND',
+         'UT'
+         )
+SecondPopulationGroup<- c(
+         'RI',
+         'MA',
+         'CT',
+         'MO',
+         'WI',
+          'IA',
+          'PA',
+          'OR',
+          'GA',
+          'MI',
+          'OH',
+          'NC',
+          'OK',
+          'TN',
+          'WA',
+         'AL'
+         )
+ThirdPopulationGroup  <- c(
+          'IN',
+          'FL',
+          'NM',
+          'TX',
+          'VA',
+          'LA',
+           'CO',
+           'CA',
+           'MD',
+           'NV',
+           'IL',
+           'AZ',
+           'NY',
+           'KS',
+           'AK'
+          )
+
+
+
+```
+
+##Preparing data for kmeans clustering
+
+Preparing data groups for clustering. Performing clustering on all the states with different population, dividinginto many clusters will limit the results. Hence performing cluster analysis on group of data with similar population size will give better clusters with similar features and makes the analysis more sensible. 
+
+```{r}
+
+Group1 <- aggrCrimeData2[ which(aggrCrimeData2$state %in% FirstPopulationGroup), ]
+Group2 <- aggrCrimeData2[ which(aggrCrimeData2$state %in% SecondPopulationGroup), ]
+Group3 <- aggrCrimeData2[ which(aggrCrimeData2$state %in% ThirdPopulationGroup), ]
+
+
+```
+
+##K-means 
+
+Performing k means clustering using two set of feature groups. 
+
+1. Based on unemployment, poverty and failed education and the number of violent crimes 
+2. Based on type of crime - Murders,Rapes,Robberies,Assaults,Burglaries,Larcenies,AutoTheft
+
+##Unemployment,poverty and failed education and the number of violent crimes
+
+```{r}
+
+#install.packages('cluster')
+#install.packages('factoextra')
+library(cluster)    # clustering algorithms
+library(factoextra)
+
+# Clustering first population group 
+
+Clustergroup1 <- Group1[,-1]
+rownames(Clustergroup1) <-  Group1[,1]
+Clustergroup1 <- na.omit(Clustergroup1)
+Clustergroup1  <- Clustergroup1[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup1  <- scale(Clustergroup1)
+Clustergroup1  <- as.data.frame(Clustergroup1)
+DistanceMatrix1 <- get_dist(Clustergroup1)
+DistancePlot1  <- fviz_dist(DistanceMatrix1, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup1 <- kmeans(Clustergroup1, centers = 2 , nstart = 30)
+str(KClusterGroup1)
+ClusterPlot1 <- fviz_cluster(KClusterGroup1, data = Clustergroup1, 
+                             main = "Mean population < 33k")
+
+
+# Clustering second  population group 
+
+Clustergroup2 <- Group2[,-1]
+rownames(Clustergroup2) <-  Group2[,1]
+Clustergroup2 <- na.omit(Clustergroup2)
+Clustergroup2  <- Clustergroup2[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup2  <- scale(Clustergroup2)
+Clustergroup2  <- as.data.frame(Clustergroup2)
+DistanceMatrix2 <- get_dist(Clustergroup2)
+DistancePlot2  <- fviz_dist(DistanceMatrix2, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup2 <- kmeans(Clustergroup2, centers = 2 , nstart = 30)
+str(KClusterGroup2)
+ClusterPlot2 <- fviz_cluster(KClusterGroup2, data = Clustergroup2,
+                             main = "Mean population range 34-49k")
+
+# Clustering third  population group 
+
+Clustergroup3 <- Group3[,-1]
+rownames(Clustergroup3) <-  Group3[,1]
+Clustergroup3 <- na.omit(Clustergroup3)
+Clustergroup3  <- Clustergroup3[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup3  <- scale(Clustergroup3)
+Clustergroup3  <- as.data.frame(Clustergroup3)
+DistanceMatrix3 <- get_dist(Clustergroup3)
+DistancePlot3  <- fviz_dist(DistanceMatrix3, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup3 <- kmeans(Clustergroup3, centers = 2 , nstart = 30)
+str(KClusterGroup3)
+ClusterPlot3 <- fviz_cluster(KClusterGroup3, data = Clustergroup3, 
+                             main = "Mean population range >49k")
+
+
+# plots in a grid for different groups 
+
+library(gridExtra)
+grid.arrange(DistancePlot1, DistancePlot2, DistancePlot3, 
+             nrow =2, top = 'Distance matrix of the grouped population data')
+
+grid.arrange(ClusterPlot1, ClusterPlot2, ClusterPlot3, 
+             nrow = 2) 
+
+```
+
+
+
+
+##Evaluation using elbow method
+
+Using elbow method to find the optimal number of clusters 
+
+```{r}
+
+
+
+set.seed(1000)
+Plot1 <- fviz_nbclust(Clustergroup3,kmeans, method = "wss")
+
+set.seed(1000)
+Plot2 <- fviz_nbclust(Clustergroup2,kmeans, method = "wss")
+
+set.seed(1000)
+Plot3 <- fviz_nbclust(Clustergroup1,kmeans, method = "wss")
+
+grid.arrange(Plot1, Plot2, Plot3, nrow = 2, top = 'Optimal number of clusters for first clustering group')
+
+
+```
+
+The elbow drops at 5 for all the groups divided hence 5 is the optimal number of clusters for splitting the data. 
+
+Updating k = 5 in the cluster size
+
+```{r}
+
+
+Clustergroup1 <- Group1[,-1]
+rownames(Clustergroup1) <-  Group1[,1]
+Clustergroup1 <- na.omit(Clustergroup1)
+Clustergroup1  <- Clustergroup1[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup1  <- scale(Clustergroup1)
+Clustergroup1  <- as.data.frame(Clustergroup1)
+DistanceMatrix1 <- get_dist(Clustergroup1)
+DistancePlot1  <- fviz_dist(DistanceMatrix1, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup1 <- kmeans(Clustergroup1, centers = 5 , nstart = 30)
+str(KClusterGroup1)
+ClusterPlot1 <- fviz_cluster(KClusterGroup1, data = Clustergroup1, 
+                             main = "Mean population < 33k")
+
+
+# Clustering second  population group 
+
+Clustergroup2 <- Group2[,-1]
+rownames(Clustergroup2) <-  Group2[,1]
+Clustergroup2 <- na.omit(Clustergroup2)
+Clustergroup2  <- Clustergroup2[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup2  <- scale(Clustergroup2)
+Clustergroup2  <- as.data.frame(Clustergroup2)
+DistanceMatrix2 <- get_dist(Clustergroup2)
+DistancePlot2  <- fviz_dist(DistanceMatrix2, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup2 <- kmeans(Clustergroup2, centers = 5 , nstart = 30)
+str(KClusterGroup2)
+ClusterPlot2 <- fviz_cluster(KClusterGroup2, data = Clustergroup2,
+                             main = "Mean population range 34-49k")
+
+# Clustering third  population group 
+
+Clustergroup3 <- Group3[,-1]
+rownames(Clustergroup3) <-  Group3[,1]
+Clustergroup3 <- na.omit(Clustergroup3)
+Clustergroup3  <- Clustergroup3[,c('Poverty', 'MiddleSchoolDropOut',
+                                  'HighSchoolDropOut','Unemployed',
+                                  'ViolentCrimes')]
+Clustergroup3  <- scale(Clustergroup3)
+Clustergroup3  <- as.data.frame(Clustergroup3)
+DistanceMatrix3 <- get_dist(Clustergroup3)
+DistancePlot3  <- fviz_dist(DistanceMatrix3, gradient = list(low = "#00AFBB", 
+                                                            mid = "white",
+                                                            high = "blue"))
+KClusterGroup3 <- kmeans(Clustergroup3, centers = 5 , nstart = 30)
+str(KClusterGroup3)
+ClusterPlot3 <- fviz_cluster(KClusterGroup3, data = Clustergroup3, 
+                             main = "Mean population range >49k")
+
+
+# plots in a grid for different groups 
+
+library(gridExtra)
+grid.arrange(ClusterPlot1, ClusterPlot2, ClusterPlot3, 
+             nrow = 2) 
+
+
+
+```
